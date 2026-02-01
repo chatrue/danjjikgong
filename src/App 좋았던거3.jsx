@@ -3,7 +3,7 @@ import { loadState, saveState, uid } from "./lib/store.js";
 import { speakText, stopSpeak } from "./lib/tts.js";
 import { buildQuiz } from "./lib/quiz.js";
 import { runOCRAndExtract } from "./lib/ocr_extract.js";
-import { exportAsPDF, exportAsDJJGPNG, formatKSTDateTime } from "./lib/export_pack.js";
+import { exportAsPDF, exportAsDJJGPNG, shareOrDownload } from "./lib/export_pack.js";
 import { parseDJJGTextBlock } from "./lib/import_pack.js";
 
 /** ---------------------------
@@ -141,43 +141,6 @@ function Modal({ open, title, children, actions }) {
   );
 }
 
-function GlobalStyles() {
-  // ✅ 화면이 좁을 때만 “세로쓰기”로 전환
-  // - 너의 요구: "가로가 짧아 늘어나는 경우만 세로"
-  // - 그래서 media query로만 작동
-  return (
-    <style>{`
-      .actionBar {
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-        flex-wrap: nowrap;
-        align-items: stretch;
-        max-width: 100%;
-        overflow-x: auto; /* 아주 좁을 때 최후 안전장치 */
-        -webkit-overflow-scrolling: touch;
-      }
-      .actionBtn {
-        white-space: nowrap;
-        line-height: 1;
-      }
-      /* ✅ 폭이 좁아지는 기기에서만 세로쓰기 */
-      @media (max-width: 360px) {
-        .actionBtn {
-          writing-mode: vertical-rl;
-          text-orientation: mixed;
-          padding: 8px 6px !important;
-          min-width: 34px;
-        }
-        /* 세로쓰기일 때 버튼 높이 맞춤 */
-        .actionBar {
-          align-items: center;
-        }
-      }
-    `}</style>
-  );
-}
-
 export default function App() {
   const [db, setDb] = useState(() => loadState());
   const [route, setRoute] = useState({ name: "home" });
@@ -227,7 +190,10 @@ export default function App() {
 
   // export modal
   const [exportOpen, setExportOpen] = useState(false);
-  const exportMountRef = useRef(null);
+
+  // export mount
+  const exportPngMountRef = useRef(null);
+  const exportPdfMountRef = useRef(null);
 
   // import input (이전 단어장 화면에서 사용)
   const importInputRef = useRef(null);
@@ -558,7 +524,7 @@ export default function App() {
     go("setDetail", { setId: merged.id });
   }
 
-  /** ✅ OCR 처리 (언어 자동 매핑 핵심: fromLang/toLang 넘김) */
+  /** ✅ OCR 처리 */
   async function handlePickImage(file) {
     if (!file) return;
 
@@ -567,11 +533,9 @@ export default function App() {
       const { blob, dataUrl } = await resizeImageForOCR(file, { maxWidth: 1200, quality: 0.8 });
       setOcrProgress({ status: "OCR 실행중...", p: 0.1 });
 
-      const { items, debug } = await runOCRAndExtract(
-        blob,
-        { fromLang, toLang },
-        (status, p) => setOcrProgress({ status, p })
-      );
+      const { items, debug } = await runOCRAndExtract(blob, (status, p) => {
+        setOcrProgress({ status, p });
+      });
 
       console.log("OCR DEBUG:", debug);
 
@@ -597,7 +561,7 @@ export default function App() {
     }
   }
 
-  /** ✅ Import: 단찍공 PNG(또는 이미지) 가져오기 (언어 자동 매핑 적용) */
+  /** ✅ Import: 단찍공 PNG(또는 이미지) 가져오기 */
   async function handleImportImage(file) {
     if (!file) return;
 
@@ -607,11 +571,9 @@ export default function App() {
 
       setOcrProgress({ status: "가져오기: OCR 실행중...", p: 0.12 });
 
-      const result = await runOCRAndExtract(
-        blob,
-        { fromLang, toLang },
-        (status, p) => setOcrProgress({ status: `가져오기: ${status}`, p })
-      );
+      const result = await runOCRAndExtract(blob, (status, p) => {
+        setOcrProgress({ status: `가져오기: ${status}`, p });
+      });
 
       const rawText = result?.rawText ?? "";
       if (!rawText) {
@@ -627,10 +589,10 @@ export default function App() {
         return;
       }
 
-      const title = (parsed.title ?? "").trim() || "단어장";
+      const title = "단어장"; // 가져오기 PNG는 title 없이(오류 방지) → 앱에서 기본값 사용
       const cleanedItems = parsed.items
         .map((x) => ({ term: (x.term ?? "").trim(), meaning: (x.meaning ?? "").trim() }))
-        .filter((x) => x.term || x.meaning);
+        .filter((x) => x.term && x.meaning);
 
       if (cleanedItems.length === 0) {
         setOcrProgress(null);
@@ -683,29 +645,40 @@ export default function App() {
     persist(next);
   }
 
-  /** ✅ Export: PDF/PNG (무료/유료 모두 가능) */
-  function exportPDFForCurrentSet() {
+  // ✅ Export helpers (저장/공유)
+  async function exportPNG({ share }) {
     if (!currentSet) return;
+    if (!exportPngMountRef.current) return;
+
     const filenameSafe = (defaultNameForSet(currentSet) || "단어장").replace(/[\\/:*?"<>|]/g, "_");
-    exportAsPDF({
-      title: defaultNameForSet(currentSet),
-      createdAt: currentSet.createdAt || Date.now(),
-      fromLabel: pair.left,
-      toLabel: pair.right,
-      items: currentSet.items || [],
-      filenameBase: `DJJG_${filenameSafe}`,
+    const filenameBase = `DJJG_${filenameSafe}_import`;
+
+    const { blob, filename } = await exportAsDJJGPNG({
+      mountEl: exportPngMountRef.current,
+      filenameBase,
+      pixelRatio: 2,
     });
+
+    if (share) {
+      await shareOrDownload({ blob, filename, mime: "image/png", preferShare: true });
+    }
   }
 
-  async function exportPNGForCurrentSet() {
+  async function exportPDF({ share }) {
     if (!currentSet) return;
-    if (!exportMountRef.current) return;
+    if (!exportPdfMountRef.current) return;
 
     const filenameSafe = (defaultNameForSet(currentSet) || "단어장").replace(/[\\/:*?"<>|]/g, "_");
-    await exportAsDJJGPNG({
-      mountEl: exportMountRef.current,
-      filenameBase: `DJJG_${filenameSafe}_import`,
+    const filenameBase = `DJJG_${filenameSafe}`;
+
+    const { blob, filename } = await exportAsPDF({
+      mountEl: exportPdfMountRef.current,
+      filenameBase,
     });
+
+    if (share) {
+      await shareOrDownload({ blob, filename, mime: "application/pdf", preferShare: true });
+    }
   }
 
   const modalActions = (modal.actions ?? []).map((a, idx) => (
@@ -723,7 +696,6 @@ export default function App() {
   if (route.name === "home") {
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="settings" />
           <div className="col">
@@ -764,7 +736,6 @@ export default function App() {
   if (route.name === "settings") {
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="설정" />
@@ -778,7 +749,12 @@ export default function App() {
 
               <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ minWidth: 92, fontWeight: 900 }}>단어</div>
-                <select value={fromLang} onChange={(e) => setLangFromUI(e.target.value)} className="input" style={{ maxWidth: 220 }}>
+                <select
+                  value={fromLang}
+                  onChange={(e) => setLangFromUI(e.target.value)}
+                  className="input"
+                  style={{ maxWidth: 220 }}
+                >
                   {LANGS.map((l) => (
                     <option key={l.code} value={l.code}>
                       {l.label}
@@ -791,7 +767,12 @@ export default function App() {
 
               <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ minWidth: 92, fontWeight: 900 }}>뜻</div>
-                <select value={toLang} onChange={(e) => setLangToUI(e.target.value)} className="input" style={{ maxWidth: 220 }}>
+                <select
+                  value={toLang}
+                  onChange={(e) => setLangToUI(e.target.value)}
+                  className="input"
+                  style={{ maxWidth: 220 }}
+                >
                   {LANGS.map((l) => (
                     <option key={l.code} value={l.code}>
                       {l.label}
@@ -814,7 +795,11 @@ export default function App() {
                 <div className="small">현재는 내보내기/가져오기 기능도 무료에서 열어둔 상태예요.</div>
               )}
               <div style={{ height: 10 }} />
-              <button className={isPremium() ? "btn secondary" : "btn"} onClick={() => openPremiumScreen(route)} style={{ textAlign: "center" }}>
+              <button
+                className={isPremium() ? "btn secondary" : "btn"}
+                onClick={() => openPremiumScreen(route)}
+                style={{ textAlign: "center" }}
+              >
                 {isPremium() ? "프리미엄 정보 보기" : `평생 프리미엄 (${LIFETIME_PRICE})`}
               </button>
             </div>
@@ -844,7 +829,6 @@ export default function App() {
 
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="평생 프리미엄" />
@@ -928,7 +912,6 @@ export default function App() {
 
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="단어장 찍기" />
@@ -962,7 +945,6 @@ export default function App() {
 
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="인식 결과" />
@@ -1012,7 +994,6 @@ export default function App() {
   if (route.name === "create") {
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="단어장 직접 만들기" />
@@ -1076,7 +1057,6 @@ export default function App() {
 
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="이전 단어장" />
@@ -1266,9 +1246,28 @@ export default function App() {
       setEditMode(false);
     }
 
+    // ✅ 버튼 줄바꿈 방지 + 세로 정렬(가로 스크롤 허용)
+    const actionBarStyle = {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      flexWrap: "nowrap",
+      overflowX: "auto",
+      paddingBottom: 4,
+      WebkitOverflowScrolling: "touch",
+    };
+
+    const actionBtnStyle = {
+      whiteSpace: "nowrap",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      lineHeight: 1,
+      minHeight: 34,
+    };
+
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title={defaultNameForSet(currentSet)} />
@@ -1278,32 +1277,33 @@ export default function App() {
               단어 {currentSet.items.length}개 · {formatKoreanDateTime(currentSet.createdAt)}
             </div>
 
-            {/* ✅ 여기: 좁은 화면에서만 세로쓰기 적용되는 actionBar/actionBtn */}
-            <div className="actionBar">
-              <button className="iconbtn actionBtn" disabled={editMode} onClick={() => startQuizFromSet(currentSet, "mcq")}>
-                객관식
-              </button>
-              <button className="iconbtn actionBtn" disabled={editMode} onClick={() => startQuizFromSet(currentSet, "written")}>
-                주관식
-              </button>
-
-              {!editMode ? (
-                <button className="iconbtn actionBtn" onClick={() => setEditMode(true)}>
-                  수정
+            <div style={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>
+              <div style={actionBarStyle}>
+                <button className="iconbtn" style={actionBtnStyle} disabled={editMode} onClick={() => startQuizFromSet(currentSet, "mcq")}>
+                  객관식
                 </button>
-              ) : (
-                <button className="iconbtn actionBtn" onClick={saveEdits}>
-                  저장
+                <button className="iconbtn" style={actionBtnStyle} disabled={editMode} onClick={() => startQuizFromSet(currentSet, "written")}>
+                  주관식
                 </button>
-              )}
 
-              <button className="iconbtn actionBtn" onClick={() => go("sets")}>
-                이전 단어장
-              </button>
+                {!editMode ? (
+                  <button className="iconbtn" style={actionBtnStyle} onClick={() => setEditMode(true)}>
+                    수정
+                  </button>
+                ) : (
+                  <button className="iconbtn" style={actionBtnStyle} onClick={saveEdits}>
+                    저장
+                  </button>
+                )}
 
-              <button className="iconbtn actionBtn" onClick={() => setExportOpen(true)}>
-                내보내기
-              </button>
+                <button className="iconbtn" style={actionBtnStyle} onClick={() => go("sets")}>
+                  이전 단어장
+                </button>
+
+                <button className="iconbtn" style={actionBtnStyle} onClick={() => setExportOpen(true)}>
+                  내보내기
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1337,7 +1337,7 @@ export default function App() {
           )}
         </div>
 
-        {/* ✅ Export Modal */}
+        {/* ✅ Export Modal: PDF/PNG 저장 + 공유 */}
         {exportOpen && (
           <div
             style={{
@@ -1366,16 +1366,74 @@ export default function App() {
               <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 10 }}>내보내기</div>
 
               <div className="small" style={{ marginBottom: 12, opacity: 0.9 }}>
-                PDF는 사람용(공유/프린트), PNG는 단찍공이 다시 읽기 쉬운 구조예요.
+                내보내는 파일에는 <b>단어 | 뜻</b>만 들어가요.
+                <br />
+                PDF는 공유/프린트용, PNG는 단찍공 가져오기용이에요.
               </div>
 
               <div className="col" style={{ gap: 10 }}>
-                <button className="btn" onClick={exportPDFForCurrentSet} style={{ textAlign: "center" }}>
-                  PDF로 저장
-                </button>
-                <button className="btn secondary" onClick={exportPNGForCurrentSet} style={{ textAlign: "center" }}>
-                  단찍공 PNG로 저장
-                </button>
+                <div className="row" style={{ gap: 10 }}>
+                  <button
+                    className="btn"
+                    onClick={async () => {
+                      try {
+                        await exportPDF({ share: false });
+                      } catch (e) {
+                        console.error(e);
+                        alert("PDF 저장 중 오류가 발생했어요.");
+                      }
+                    }}
+                    style={{ textAlign: "center", flex: 1 }}
+                  >
+                    PDF 저장
+                  </button>
+                  <button
+                    className="btn secondary"
+                    onClick={async () => {
+                      try {
+                        await exportPDF({ share: true });
+                      } catch (e) {
+                        console.error(e);
+                        alert("PDF 공유 중 오류가 발생했어요.");
+                      }
+                    }}
+                    style={{ textAlign: "center", flex: 1 }}
+                  >
+                    PDF 공유
+                  </button>
+                </div>
+
+                <div className="row" style={{ gap: 10 }}>
+                  <button
+                    className="btn"
+                    onClick={async () => {
+                      try {
+                        await exportPNG({ share: false });
+                      } catch (e) {
+                        console.error(e);
+                        alert("PNG 저장 중 오류가 발생했어요.");
+                      }
+                    }}
+                    style={{ textAlign: "center", flex: 1 }}
+                  >
+                    PNG 저장
+                  </button>
+                  <button
+                    className="btn secondary"
+                    onClick={async () => {
+                      try {
+                        await exportPNG({ share: true });
+                      } catch (e) {
+                        console.error(e);
+                        alert("PNG 공유 중 오류가 발생했어요.");
+                      }
+                    }}
+                    style={{ textAlign: "center", flex: 1 }}
+                  >
+                    PNG 공유
+                  </button>
+                </div>
+
                 <button className="btn secondary" onClick={() => setExportOpen(false)} style={{ textAlign: "center" }}>
                   닫기
                 </button>
@@ -1384,21 +1442,22 @@ export default function App() {
           </div>
         )}
 
-        {/* ✅ PNG 생성용 DOM */}
+        {/* ✅ PNG/PDF 생성용 DOM (단어|뜻만) - 빈 화면 방지용으로 "실제 렌더"는 되게 하되 화면 밖에 둠 */}
         <div
           style={{
             position: "fixed",
-            left: 0,
+            left: -99999,
             top: 0,
             width: 1,
             height: 1,
-            opacity: 0,
+            opacity: 0.01,
             pointerEvents: "none",
             zIndex: -1,
           }}
         >
+          {/* PNG 용(가져오기 OCR에 최적화) */}
           <div
-            ref={exportMountRef}
+            ref={exportPngMountRef}
             style={{
               width: 900,
               padding: 24,
@@ -1409,19 +1468,33 @@ export default function App() {
               color: "#111",
             }}
           >
-            <div style={{ fontWeight: 800, fontSize: 22, marginBottom: 10 }}>DJJG 단찍공</div>
-            <div style={{ fontSize: 16, marginBottom: 6 }}>TITLE: {(currentSet?.title ?? "").trim() ? currentSet.title.trim() : "단어장"}</div>
-            <div style={{ fontSize: 14, marginBottom: 6 }}>DATE: {formatKSTDateTime(currentSet?.createdAt || Date.now())}</div>
-            <div style={{ fontSize: 14, marginBottom: 10 }}>
-              LANG: {pair.left} → {pair.right}
-            </div>
-            <div style={{ borderTop: "1px solid #ddd", margin: "12px 0" }} />
-            {(currentSet?.items ?? []).map((it, idx) => (
-              <div key={idx} style={{ fontSize: 16, lineHeight: 1.5 }}>
+            {(currentSet.items ?? []).map((it, idx) => (
+              <div key={idx} style={{ fontSize: 18, lineHeight: 1.6, fontWeight: 600 }}>
                 {(it.term ?? "").toString()} {" | "} {(it.meaning ?? "").toString()}
               </div>
             ))}
-            <div style={{ borderTop: "1px solid #ddd", marginTop: 12 }} />
+          </div>
+
+          {/* PDF 용(보기/프린트 최적화) */}
+          <div
+            ref={exportPdfMountRef}
+            style={{
+              width: 900,
+              padding: 28,
+              background: "#fff",
+              border: "1px solid #ddd",
+              borderRadius: 14,
+              fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+              color: "#111",
+            }}
+          >
+            {(currentSet.items ?? []).map((it, idx) => (
+              <div key={idx} style={{ fontSize: 16, lineHeight: 1.7 }}>
+                <span style={{ fontWeight: 800 }}>{(it.term ?? "").toString()}</span>
+                <span> {" | "} </span>
+                <span>{(it.meaning ?? "").toString()}</span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -1435,18 +1508,15 @@ export default function App() {
   // QUIZ
   if (route.name === "quiz") {
     return (
-      <div className="container">
-        <GlobalStyles />
-        <QuizScreen
-          brand="DJJG 단찍공"
-          pair={pair}
-          route={route}
-          timerRef={timerRef}
-          onExitToSet={() => go("setDetail", { setId: route.setId })}
-          onHome={() => goHome()}
-          onUpdateRoute={(next) => setRoute(next)}
-        />
-      </div>
+      <QuizScreen
+        brand="DJJG 단찍공"
+        pair={pair}
+        route={route}
+        timerRef={timerRef}
+        onExitToSet={() => go("setDetail", { setId: route.setId })}
+        onHome={() => goHome()}
+        onUpdateRoute={(next) => setRoute(next)}
+      />
     );
   }
 
@@ -1530,17 +1600,19 @@ function QuizScreen({ brand, pair, route, timerRef, onExitToSet, onHome, onUpdat
 
   if (!q) {
     return (
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ fontWeight: 900 }}>{brand}</div>
-          <button className="iconbtn" onClick={onHome}>
-            🏠
+      <div className="container">
+        <div className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ fontWeight: 900 }}>{brand}</div>
+            <button className="iconbtn" onClick={onHome}>
+              🏠
+            </button>
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 10, textAlign: "center" }}>학습 완료</div>
+          <button className="btn" onClick={onExitToSet} style={{ textAlign: "center" }}>
+            단어장으로
           </button>
         </div>
-        <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 10, textAlign: "center" }}>학습 완료</div>
-        <button className="btn" onClick={onExitToSet} style={{ textAlign: "center" }}>
-          단어장으로
-        </button>
       </div>
     );
   }
@@ -1594,73 +1666,75 @@ function QuizScreen({ brand, pair, route, timerRef, onExitToSet, onHome, onUpdat
   }
 
   return (
-    <div className="card">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontWeight: 900 }}>{brand}</div>
-        <button className="iconbtn" onClick={onHome} aria-label="홈">
-          🏠
-        </button>
-      </div>
+    <div className="container">
+      <div className="card">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontWeight: 900 }}>{brand}</div>
+          <button className="iconbtn" onClick={onHome} aria-label="홈">
+            🏠
+          </button>
+        </div>
 
-      <div className="kv" style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 20, fontWeight: 900, textAlign: "center", flex: 1 }}>학습</div>
-        <button className="iconbtn" onClick={onExitToSet} aria-label="나가기">
-          나가기
-        </button>
-      </div>
+        <div className="kv" style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 20, fontWeight: 900, textAlign: "center", flex: 1 }}>학습</div>
+          <button className="iconbtn" onClick={onExitToSet} aria-label="나가기">
+            나가기
+          </button>
+        </div>
 
-      <div className="small" style={{ marginBottom: 10 }}>
-        {qIndex + 1} / {questions.length}
-      </div>
+        <div className="small" style={{ marginBottom: 10 }}>
+          {qIndex + 1} / {questions.length}
+        </div>
 
-      {showSheet && last ? (
-        <AnswerSheet last={last} onNext={nextAfterSheet} />
-      ) : (
-        <>
-          {q.isListening && (
-            <div className="row" style={{ marginBottom: 12 }}>
-              <button className="btn secondary" onClick={() => speakText(item.term, pair.ttsLang)} style={{ textAlign: "center" }}>
-                🔊 듣기
-              </button>
-            </div>
-          )}
-
-          <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 10 }}>{promptLine()}</div>
-
-          {q.format === "mcq" ? (
-            <>
-              <div className="small" style={{ marginBottom: 10 }}>
-                {mcqHint()}
+        {showSheet && last ? (
+          <AnswerSheet last={last} onNext={nextAfterSheet} />
+        ) : (
+          <>
+            {q.isListening && (
+              <div className="row" style={{ marginBottom: 12 }}>
+                <button className="btn secondary" onClick={() => speakText(item.term, pair.ttsLang)} style={{ textAlign: "center" }}>
+                  🔊 듣기
+                </button>
               </div>
+            )}
+
+            <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 10 }}>{promptLine()}</div>
+
+            {q.format === "mcq" ? (
+              <>
+                <div className="small" style={{ marginBottom: 10 }}>
+                  {mcqHint()}
+                </div>
+                <div className="col">
+                  {q.choices.map((c, idx) => (
+                    <button key={idx} className="btn secondary" onClick={() => submit(c)} style={{ textAlign: "center" }}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
               <div className="col">
-                {q.choices.map((c, idx) => (
-                  <button key={idx} className="btn secondary" onClick={() => submit(c)} style={{ textAlign: "center" }}>
-                    {c}
-                  </button>
-                ))}
+                <div className="row" style={{ alignItems: "center" }}>
+                  <div style={{ minWidth: 72, fontWeight: 900 }}>{inputLabel()}</div>
+                  <input
+                    className="input"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="정답을 입력하세요"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submit(input);
+                    }}
+                  />
+                </div>
+                <button className="btn" onClick={() => submit(input)} style={{ textAlign: "center" }}>
+                  제출
+                </button>
               </div>
-            </>
-          ) : (
-            <div className="col">
-              <div className="row" style={{ alignItems: "center" }}>
-                <div style={{ minWidth: 72, fontWeight: 900 }}>{inputLabel()}</div>
-                <input
-                  className="input"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="정답을 입력하세요"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") submit(input);
-                  }}
-                />
-              </div>
-              <button className="btn" onClick={() => submit(input)} style={{ textAlign: "center" }}>
-                제출
-              </button>
-            </div>
-          )}
-        </>
-      )}
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

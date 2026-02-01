@@ -141,43 +141,6 @@ function Modal({ open, title, children, actions }) {
   );
 }
 
-function GlobalStyles() {
-  // ✅ 화면이 좁을 때만 “세로쓰기”로 전환
-  // - 너의 요구: "가로가 짧아 늘어나는 경우만 세로"
-  // - 그래서 media query로만 작동
-  return (
-    <style>{`
-      .actionBar {
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-        flex-wrap: nowrap;
-        align-items: stretch;
-        max-width: 100%;
-        overflow-x: auto; /* 아주 좁을 때 최후 안전장치 */
-        -webkit-overflow-scrolling: touch;
-      }
-      .actionBtn {
-        white-space: nowrap;
-        line-height: 1;
-      }
-      /* ✅ 폭이 좁아지는 기기에서만 세로쓰기 */
-      @media (max-width: 360px) {
-        .actionBtn {
-          writing-mode: vertical-rl;
-          text-orientation: mixed;
-          padding: 8px 6px !important;
-          min-width: 34px;
-        }
-        /* 세로쓰기일 때 버튼 높이 맞춤 */
-        .actionBar {
-          align-items: center;
-        }
-      }
-    `}</style>
-  );
-}
-
 export default function App() {
   const [db, setDb] = useState(() => loadState());
   const [route, setRoute] = useState({ name: "home" });
@@ -558,7 +521,7 @@ export default function App() {
     go("setDetail", { setId: merged.id });
   }
 
-  /** ✅ OCR 처리 (언어 자동 매핑 핵심: fromLang/toLang 넘김) */
+  /** ✅ OCR 처리 */
   async function handlePickImage(file) {
     if (!file) return;
 
@@ -567,11 +530,9 @@ export default function App() {
       const { blob, dataUrl } = await resizeImageForOCR(file, { maxWidth: 1200, quality: 0.8 });
       setOcrProgress({ status: "OCR 실행중...", p: 0.1 });
 
-      const { items, debug } = await runOCRAndExtract(
-        blob,
-        { fromLang, toLang },
-        (status, p) => setOcrProgress({ status, p })
-      );
+      const { items, debug } = await runOCRAndExtract(blob, (status, p) => {
+        setOcrProgress({ status, p });
+      });
 
       console.log("OCR DEBUG:", debug);
 
@@ -597,7 +558,7 @@ export default function App() {
     }
   }
 
-  /** ✅ Import: 단찍공 PNG(또는 이미지) 가져오기 (언어 자동 매핑 적용) */
+  /** ✅ Import: 단찍공 PNG(또는 이미지) 가져오기 (무료/유료 모두 가능) */
   async function handleImportImage(file) {
     if (!file) return;
 
@@ -607,11 +568,9 @@ export default function App() {
 
       setOcrProgress({ status: "가져오기: OCR 실행중...", p: 0.12 });
 
-      const result = await runOCRAndExtract(
-        blob,
-        { fromLang, toLang },
-        (status, p) => setOcrProgress({ status: `가져오기: ${status}`, p })
-      );
+      const result = await runOCRAndExtract(blob, (status, p) => {
+        setOcrProgress({ status: `가져오기: ${status}`, p });
+      });
 
       const rawText = result?.rawText ?? "";
       if (!rawText) {
@@ -723,7 +682,6 @@ export default function App() {
   if (route.name === "home") {
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="settings" />
           <div className="col">
@@ -737,6 +695,7 @@ export default function App() {
               이전 단어장
             </button>
 
+            {/* ✅ 1) 첫화면 '무료 사용 중' 맨 밑, 유료면 숨김 */}
             {!isPremium() && (
               <div style={{ marginTop: 16, textAlign: "center", fontSize: 12, color: "#666" }}>
                 무료 사용 중
@@ -764,7 +723,6 @@ export default function App() {
   if (route.name === "settings") {
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="설정" />
@@ -844,7 +802,6 @@ export default function App() {
 
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="평생 프리미엄" />
@@ -928,7 +885,6 @@ export default function App() {
 
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="단어장 찍기" />
@@ -962,7 +918,6 @@ export default function App() {
 
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="인식 결과" />
@@ -981,13 +936,7 @@ export default function App() {
 
           <div className="hr" />
 
-          <EditableList
-            items={items}
-            leftLabel={pair.left}
-            rightLabel={pair.right}
-            onSpeak={(t) => speakText(t, pair.ttsLang)}
-            onChange={(next) => setDraft({ ...draft, items: next })}
-          />
+          <EditableList items={items} leftLabel={pair.left} rightLabel={pair.right} onSpeak={(t) => speakText(t, pair.ttsLang)} onChange={(next) => setDraft({ ...draft, items: next })} />
 
           <div className="stickyBottom">
             <div className="row">
@@ -1012,7 +961,6 @@ export default function App() {
   if (route.name === "create") {
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="단어장 직접 만들기" />
@@ -1076,7 +1024,6 @@ export default function App() {
 
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title="이전 단어장" />
@@ -1100,7 +1047,7 @@ export default function App() {
                 </button>
 
                 <button className="iconbtn" onClick={() => importInputRef.current?.click()} style={{ textAlign: "center" }}>
-                  가져오기
+                  가져오기(Import)
                 </button>
 
                 <input
@@ -1219,6 +1166,7 @@ export default function App() {
             )}
           </div>
 
+          {/* ✅ 2) 이전 단어장: 무료 사용 중 + 다음 줄에 제한 문구 */}
           {!isPremium() && (
             <div
               style={{
@@ -1268,7 +1216,6 @@ export default function App() {
 
     return (
       <div className="container">
-        <GlobalStyles />
         <div className="card">
           <Header right="home" />
           <ScreenTitle title={defaultNameForSet(currentSet)} />
@@ -1278,30 +1225,29 @@ export default function App() {
               단어 {currentSet.items.length}개 · {formatKoreanDateTime(currentSet.createdAt)}
             </div>
 
-            {/* ✅ 여기: 좁은 화면에서만 세로쓰기 적용되는 actionBar/actionBtn */}
-            <div className="actionBar">
-              <button className="iconbtn actionBtn" disabled={editMode} onClick={() => startQuizFromSet(currentSet, "mcq")}>
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+              <button className="iconbtn" disabled={editMode} onClick={() => startQuizFromSet(currentSet, "mcq")}>
                 객관식
               </button>
-              <button className="iconbtn actionBtn" disabled={editMode} onClick={() => startQuizFromSet(currentSet, "written")}>
+              <button className="iconbtn" disabled={editMode} onClick={() => startQuizFromSet(currentSet, "written")}>
                 주관식
               </button>
 
               {!editMode ? (
-                <button className="iconbtn actionBtn" onClick={() => setEditMode(true)}>
+                <button className="iconbtn" onClick={() => setEditMode(true)}>
                   수정
                 </button>
               ) : (
-                <button className="iconbtn actionBtn" onClick={saveEdits}>
+                <button className="iconbtn" onClick={saveEdits}>
                   저장
                 </button>
               )}
 
-              <button className="iconbtn actionBtn" onClick={() => go("sets")}>
+              <button className="iconbtn" onClick={() => go("sets")}>
                 이전 단어장
               </button>
 
-              <button className="iconbtn actionBtn" onClick={() => setExportOpen(true)}>
+              <button className="iconbtn" onClick={() => setExportOpen(true)}>
                 내보내기
               </button>
             </div>
@@ -1384,7 +1330,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ✅ PNG 생성용 DOM */}
+        {/* ✅ PNG 생성용 DOM: "빈 화면" 방지 위해 화면 안쪽에 두고 opacity만 0 */}
         <div
           style={{
             position: "fixed",
@@ -1435,18 +1381,15 @@ export default function App() {
   // QUIZ
   if (route.name === "quiz") {
     return (
-      <div className="container">
-        <GlobalStyles />
-        <QuizScreen
-          brand="DJJG 단찍공"
-          pair={pair}
-          route={route}
-          timerRef={timerRef}
-          onExitToSet={() => go("setDetail", { setId: route.setId })}
-          onHome={() => goHome()}
-          onUpdateRoute={(next) => setRoute(next)}
-        />
-      </div>
+      <QuizScreen
+        brand="DJJG 단찍공"
+        pair={pair}
+        route={route}
+        timerRef={timerRef}
+        onExitToSet={() => go("setDetail", { setId: route.setId })}
+        onHome={() => goHome()}
+        onUpdateRoute={(next) => setRoute(next)}
+      />
     );
   }
 
@@ -1530,17 +1473,19 @@ function QuizScreen({ brand, pair, route, timerRef, onExitToSet, onHome, onUpdat
 
   if (!q) {
     return (
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ fontWeight: 900 }}>{brand}</div>
-          <button className="iconbtn" onClick={onHome}>
-            🏠
+      <div className="container">
+        <div className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ fontWeight: 900 }}>{brand}</div>
+            <button className="iconbtn" onClick={onHome}>
+              🏠
+            </button>
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 10, textAlign: "center" }}>학습 완료</div>
+          <button className="btn" onClick={onExitToSet} style={{ textAlign: "center" }}>
+            단어장으로
           </button>
         </div>
-        <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 10, textAlign: "center" }}>학습 완료</div>
-        <button className="btn" onClick={onExitToSet} style={{ textAlign: "center" }}>
-          단어장으로
-        </button>
       </div>
     );
   }
@@ -1594,73 +1539,75 @@ function QuizScreen({ brand, pair, route, timerRef, onExitToSet, onHome, onUpdat
   }
 
   return (
-    <div className="card">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontWeight: 900 }}>{brand}</div>
-        <button className="iconbtn" onClick={onHome} aria-label="홈">
-          🏠
-        </button>
-      </div>
+    <div className="container">
+      <div className="card">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontWeight: 900 }}>{brand}</div>
+          <button className="iconbtn" onClick={onHome} aria-label="홈">
+            🏠
+          </button>
+        </div>
 
-      <div className="kv" style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 20, fontWeight: 900, textAlign: "center", flex: 1 }}>학습</div>
-        <button className="iconbtn" onClick={onExitToSet} aria-label="나가기">
-          나가기
-        </button>
-      </div>
+        <div className="kv" style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 20, fontWeight: 900, textAlign: "center", flex: 1 }}>학습</div>
+          <button className="iconbtn" onClick={onExitToSet} aria-label="나가기">
+            나가기
+          </button>
+        </div>
 
-      <div className="small" style={{ marginBottom: 10 }}>
-        {qIndex + 1} / {questions.length}
-      </div>
+        <div className="small" style={{ marginBottom: 10 }}>
+          {qIndex + 1} / {questions.length}
+        </div>
 
-      {showSheet && last ? (
-        <AnswerSheet last={last} onNext={nextAfterSheet} />
-      ) : (
-        <>
-          {q.isListening && (
-            <div className="row" style={{ marginBottom: 12 }}>
-              <button className="btn secondary" onClick={() => speakText(item.term, pair.ttsLang)} style={{ textAlign: "center" }}>
-                🔊 듣기
-              </button>
-            </div>
-          )}
-
-          <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 10 }}>{promptLine()}</div>
-
-          {q.format === "mcq" ? (
-            <>
-              <div className="small" style={{ marginBottom: 10 }}>
-                {mcqHint()}
+        {showSheet && last ? (
+          <AnswerSheet last={last} onNext={nextAfterSheet} />
+        ) : (
+          <>
+            {q.isListening && (
+              <div className="row" style={{ marginBottom: 12 }}>
+                <button className="btn secondary" onClick={() => speakText(item.term, pair.ttsLang)} style={{ textAlign: "center" }}>
+                  🔊 듣기
+                </button>
               </div>
+            )}
+
+            <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 10 }}>{promptLine()}</div>
+
+            {q.format === "mcq" ? (
+              <>
+                <div className="small" style={{ marginBottom: 10 }}>
+                  {mcqHint()}
+                </div>
+                <div className="col">
+                  {q.choices.map((c, idx) => (
+                    <button key={idx} className="btn secondary" onClick={() => submit(c)} style={{ textAlign: "center" }}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
               <div className="col">
-                {q.choices.map((c, idx) => (
-                  <button key={idx} className="btn secondary" onClick={() => submit(c)} style={{ textAlign: "center" }}>
-                    {c}
-                  </button>
-                ))}
+                <div className="row" style={{ alignItems: "center" }}>
+                  <div style={{ minWidth: 72, fontWeight: 900 }}>{inputLabel()}</div>
+                  <input
+                    className="input"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="정답을 입력하세요"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submit(input);
+                    }}
+                  />
+                </div>
+                <button className="btn" onClick={() => submit(input)} style={{ textAlign: "center" }}>
+                  제출
+                </button>
               </div>
-            </>
-          ) : (
-            <div className="col">
-              <div className="row" style={{ alignItems: "center" }}>
-                <div style={{ minWidth: 72, fontWeight: 900 }}>{inputLabel()}</div>
-                <input
-                  className="input"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="정답을 입력하세요"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") submit(input);
-                  }}
-                />
-              </div>
-              <button className="btn" onClick={() => submit(input)} style={{ textAlign: "center" }}>
-                제출
-              </button>
-            </div>
-          )}
-        </>
-      )}
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

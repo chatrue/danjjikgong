@@ -1,24 +1,44 @@
+// src/lib/store.js
+// State schema v2 (DJJG 단찍공)
+// - settings: { premium:boolean, pair:string }
+// - sets: [{id,title,createdAt,items:[{term,meaning}], meta?}]
+
+const KEY = "djjg_state_v2";
+
 export function uid() {
-  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+  return Math.random().toString(36).slice(2, 10) + "-" + Date.now().toString(36);
 }
 
-export function nowTitle() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())} 단어장`;
+export function defaultState() {
+  return {
+    settings: {
+      premium: false,      // ✅ 평생 프리미엄(결제 연동 전: 토글 방식)
+      pair: "en-ko",       // ✅ 기본: 영어 → 한국어
+    },
+    sets: [],
+  };
 }
-
-const KEY = "dantjickgong_v1";
 
 export function loadState() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { sets: [] };
+    if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    if (!parsed?.sets) return { sets: [] };
-    return parsed;
+
+    // migrate / validate lightly
+    const st = defaultState();
+    if (parsed && typeof parsed === "object") {
+      if (parsed.settings && typeof parsed.settings === "object") {
+        st.settings.premium = !!parsed.settings.premium;
+        st.settings.pair = typeof parsed.settings.pair === "string" ? parsed.settings.pair : st.settings.pair;
+      }
+      if (Array.isArray(parsed.sets)) {
+        st.sets = parsed.sets;
+      }
+    }
+    return st;
   } catch {
-    return { sets: [] };
+    return defaultState();
   }
 }
 
