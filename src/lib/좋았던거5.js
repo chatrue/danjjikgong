@@ -5,8 +5,6 @@
 // ✅ KO 미포함 시: 보수적으로 덜 걸러서 최대한 추출(Preview에서 수정 전제)
 // ✅ table(2컬럼) 우선 + text 파서 + 항상 병합(table+text)로 누락 방지
 // ✅ (추가) 누락 의심 시 PSM 11(sparse text) 1회 재시도 → 효과 있으면 채택
-// ✅ (추가) IPA 찌꺼기 라틴 조각(rd, sf, dabl 등) term 끝에서 제거
-// ✅ (추가) KO 뜻 앞에 붙는 라틴 찌꺼기/동그라미 표식 제거
 
 import { extractPairsFromTwoColumnTable } from "./ocr_table_extract.js";
 
@@ -19,85 +17,6 @@ function clamp01(x) {
 function normSpace(s) {
   return (s ?? "").replace(/\s+/g, " ").trim();
 }
-
-function countVowels(s) {
-  return ((s || "").match(/[aeiou]/gi) || []).length;
-}
-
-const LATIN_SHORT_ALLOW = new Set([
-  "a",
-  "i",
-  "an",
-  "the",
-  "to",
-  "of",
-  "in",
-  "on",
-  "at",
-  "for",
-  "and",
-  "or",
-  "but",
-  "by",
-  "off",
-  "up",
-  "out",
-  "as",
-  "is",
-  "be",
-  "do",
-  "go",
-  "no",
-  "so",
-  "we",
-  "he",
-  "she",
-  "it",
-  "us",
-  "me",
-  "my",
-  "your",
-  "our",
-  "their",
-]);
-
-function stripTrailingJunkTokensLatin(phrase) {
-  let t = normSpace(phrase);
-  if (!t) return t;
-
-  const parts0 = t.split(" ").filter(Boolean);
-  if (parts0.length <= 1) return t;
-
-  const isSuspicious = (tok) => {
-    const s = tok.toLowerCase();
-    if (LATIN_SHORT_ALLOW.has(s)) return false;
-
-    const len = s.length;
-    if (len <= 1) return true;
-
-    const v = countVowels(s);
-
-    // rd, sf 같은 IPA 찌꺼기 (모음 0개, 짧음)
-    if (len <= 4 && v === 0) return true;
-
-    // dabl 같은 찌꺼기: 모음이 0~1개이고 짧은 경우
-    if (len <= 6 && v <= 1 && /^[a-z]+$/i.test(tok)) return true;
-
-    return false;
-  };
-
-  const parts = [...parts0];
-
-  // 마지막 토큰이 찌꺼기로 의심되면 1~2개까지 제거
-  for (let k = 0; k < 2 && parts.length > 1; k++) {
-    const last = parts[parts.length - 1];
-    if (!isSuspicious(last)) break;
-    parts.pop();
-  }
-
-  return normSpace(parts.join(" "));
-}
-
 function stripOuterPunct(s) {
   return (s ?? "")
     .trim()
@@ -119,6 +38,9 @@ function hasHangul(s) {
 function hasLatin(s) {
   return /[A-Za-z]/.test(s ?? "");
 }
+function hasJapanese(s) {
+  return /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(s ?? "");
+}
 function hasSpanishHint(s) {
   return /[áéíóúüñÁÉÍÓÚÜÑ]/.test(s ?? "");
 }
@@ -132,6 +54,12 @@ function latinRatio(s) {
 function hangulRatio(s) {
   const str = s ?? "";
   const letters = (str.match(/[가-힣]/g) || []).length;
+  const total = str.length || 1;
+  return letters / total;
+}
+function japaneseRatio(s) {
+  const str = s ?? "";
+  const letters = (str.match(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/g) || []).length;
   const total = str.length || 1;
   return letters / total;
 }
@@ -220,7 +148,6 @@ function normalizeENKeepPhraseStrict(s) {
   x = x.replace(/\s+/g, " ").trim();
   x = stripTrailingPOSToken(x);
   x = normalizeTermCase(x);
-  x = stripTrailingJunkTokensLatin(x);
   return x;
 }
 function isLikelyEnglishTermStrict(token) {
@@ -254,7 +181,6 @@ function normalizeLatinKeepPhrase(s) {
   x = x.replace(/\s+/g, " ").trim();
   x = stripTrailingPOSToken(x);
   x = normalizeTermCase(x); // 스페인어도 소문자 통일(원하면 나중에 옵션화 가능)
-  x = stripTrailingJunkTokensLatin(x);
   return x;
 }
 function isLikelyLatinText(token, { relaxed = false } = {}) {
@@ -263,6 +189,7 @@ function isLikelyLatinText(token, { relaxed = false } = {}) {
   const len = t.length;
   if (len < 2 || len > 90) return false;
 
+  // relaxed면 더 관대
   if (!relaxed) {
     if (latinRatio(t) < 0.35 && !hasSpanishHint(t)) return false;
     if (/^(n|v|adj|adv|prep|conj|pron|det|num|phr|ph|vt|vi)\.?$/i.test(t)) return false;
@@ -317,6 +244,7 @@ function fixKoreanSyllableSpacing(s) {
 function normalizeKO(s) {
   let x = (s ?? "").trim();
 
+  // 발음/대괄호/슬래시 제거(강화)
   x = x.replace(/\[[^\]]*\]/g, " ");
   x = x.replace(/\/[^/]+\/+/g, " ");
 
@@ -330,12 +258,6 @@ function normalizeKO(s) {
 
   x = x.replace(/[*•·]+/g, " ");
   x = x.replace(/\s+/g, " ").trim();
-
-  // 뜻(한글) 앞에 붙는 라틴 찌꺼기(dabl, rd 등) 제거
-  if (/[가-힣]/.test(x)) {
-    x = x.replace(/^[○●◦ㅇoO]+\s*/g, "");
-    x = x.replace(/^(?:[A-Za-z]{1,6}\s+){1,2}/, "");
-  }
 
   x = fixKoreanSyllableSpacing(x);
   return x;
@@ -352,6 +274,25 @@ function isLikelyKoreanMeaning(token, { relaxed = false } = {}) {
     if (countHangul(t) < 1) return false;
     if (hangulRatio(t) < 0.12) return false;
     if (t.length > 180) return false;
+  }
+  return true;
+}
+
+/* ---------------- JA cleanup ---------------- */
+function normalizeJA(s) {
+  let x = (s ?? "").trim();
+  x = x.replace(/\s+/g, " ").trim();
+  return x;
+}
+function isLikelyJapaneseText(token, { relaxed = false } = {}) {
+  const t = normalizeJA(token);
+  if (!t) return false;
+  if (!relaxed) {
+    if (japaneseRatio(t) < 0.15) return false;
+    if (t.length > 120) return false;
+  } else {
+    if (japaneseRatio(t) < 0.08) return false;
+    if (t.length > 160) return false;
   }
   return true;
 }
@@ -379,11 +320,13 @@ function looksLikeExampleSentence(line, { strictKO = false } = {}) {
   const s = (line ?? "").trim();
   if (!s) return false;
 
+  // 명시적 예문 표식
   if (/^(예문|ex\)|e\.g\.|예:)\b/i.test(s)) return true;
 
   const wordCount = s.split(/\s+/).filter(Boolean).length;
   const hasPunct = /[.!?]/.test(s);
 
+  // ✅ 한글이 있는 경우: "길다"만으로는 제거하지 않기
   if (hasHangul(s)) {
     const lenTh = strictKO ? 85 : 75;
     if (s.length >= lenTh) {
@@ -393,6 +336,7 @@ function looksLikeExampleSentence(line, { strictKO = false } = {}) {
     return false;
   }
 
+  // 라틴/스페인어 힌트가 있는 경우
   if (hasLatin(s) || hasSpanishHint(s)) {
     const lenTh = strictKO ? 80 : 65;
     if (s.length >= lenTh && hasPunct && wordCount >= 6) return true;
@@ -422,6 +366,9 @@ function stripLeadingIndex(line) {
 /* ---------------- lang normalizer / validator ---------------- */
 function normalizeByLang(text, langCode, ctx) {
   if (langCode === "KO") return normalizeKO(text);
+  if (langCode === "JA") return normalizeJA(text);
+  // EN/ES -> latin normalize
+  // KO모드(EN->KO 등)에서는 term에 영어 strict 정규화 적용하는 게 효과적이라 분기
   if (ctx?.strictKO && langCode === "EN") return normalizeENKeepPhraseStrict(text);
   return normalizeLatinKeepPhrase(text);
 }
@@ -433,7 +380,12 @@ function isLikelyByLang(text, langCode, ctx) {
   const relaxed = !!ctx?.relaxedNonKO;
 
   if (langCode === "KO") return isLikelyKoreanMeaning(t, { relaxed });
+  if (langCode === "JA") return isLikelyJapaneseText(t, { relaxed });
+
+  // EN strict(=KO모드에서 term)
   if (ctx?.strictKO && langCode === "EN") return isLikelyEnglishTermStrict(t);
+
+  // EN/ES generic latin
   return isLikelyLatinText(t, { relaxed });
 }
 
@@ -501,6 +453,7 @@ function trySplitOneLine_Generic(line, fromLang, toLang, ctx) {
     }
   }
 
+  // 2개 이상의 공백(표 형태)로 분리
   const m = s0.split(/\s{2,}/).map((x) => x.trim()).filter(Boolean);
   if (m.length >= 2) {
     const left = m[0];
@@ -539,9 +492,11 @@ function parseLinesToPairs(lines, fromLang, toLang, ctx) {
   const pairs = [];
   const used = new Array(cleaned.length).fill(false);
 
+  // 1) 한 줄 분리
   for (let i = 0; i < cleaned.length; i++) {
     let one = null;
 
+    // KO 포함인 경우 KO 특화 split을 먼저 시도(성공률 높음)
     if (ctx?.strictKO && ((fromLang === "EN" && toLang === "KO") || (fromLang === "KO" && toLang !== "KO"))) {
       one = trySplitOneLine_KO(cleaned[i], fromLang, toLang, ctx);
     }
@@ -554,6 +509,7 @@ function parseLinesToPairs(lines, fromLang, toLang, ctx) {
     }
   }
 
+  // 2) 두 줄 페어링 (다음 1~3줄 탐색: KO모드에서 누락 보강에 효과)
   for (let i = 0; i < cleaned.length; i++) {
     if (used[i]) continue;
 
@@ -700,6 +656,7 @@ function buildTessLang(fromLang, toLang) {
 
   const set = new Set([a, b]);
 
+  // ✅ EN/ES가 관련된 경우에만 eng를 섞어서 안정성 확보
   if (fromLang === "EN" || toLang === "EN" || fromLang === "ES" || toLang === "ES") {
     set.add("eng");
   }
@@ -722,6 +679,7 @@ async function runTesseractTextOnly(
   const result = await Tesseract.recognize(file, lang, {
     tessedit_pageseg_mode: psm,
     preserve_interword_spaces: "1",
+    // ✅ 브라우저/모바일 캡처에서 도움이 되는 경우가 많음(없어도 동작)
     user_defined_dpi: "300",
     logger: (m) => {
       if (m && typeof m.progress === "number") {
@@ -748,6 +706,13 @@ function parseRawTextToItems(rawText, fromLang, toLang, ctx) {
 }
 
 /* ---------------- main ---------------- */
+/**
+ * ✅ 기존 호환:
+ * - runOCRAndExtract(file, onProgress)
+ * - runOCRAndExtract(file, options, onProgress)
+ *
+ * options: { fromLang: "EN"|"KO"|"ES"|"JA", toLang: ... }
+ */
 export async function runOCRAndExtract(file, optionsOrOnProgress, maybeOnProgress) {
   let options = { fromLang: "EN", toLang: "KO" };
   let onProgress = null;
@@ -761,7 +726,9 @@ export async function runOCRAndExtract(file, optionsOrOnProgress, maybeOnProgres
 
   const { fromLang, toLang } = options;
 
+  // KO 포함이면 strict 정제(잡음 억제) 모드
   const strictKO = fromLang === "KO" || toLang === "KO";
+  // KO 미포함이면 덜 걸러서 최대한 추출(Preview 수정 전제)
   const relaxedNonKO = !strictKO;
 
   const ctx = { strictKO, relaxedNonKO };
@@ -797,6 +764,7 @@ export async function runOCRAndExtract(file, optionsOrOnProgress, maybeOnProgres
   } catch (e) {
     console.warn("OCR failed with lang:", langWanted, e);
 
+    // 1차 fallback: eng+kor (브라우저에서 가장 흔히 안정)
     try {
       fallback = "eng+kor";
       usedLang = "eng+kor";
@@ -807,6 +775,7 @@ export async function runOCRAndExtract(file, optionsOrOnProgress, maybeOnProgres
     } catch (e2) {
       console.warn("OCR failed with eng+kor:", e2);
 
+      // 2차 fallback: eng
       try {
         fallback = "eng";
         usedLang = "eng";
@@ -828,8 +797,10 @@ export async function runOCRAndExtract(file, optionsOrOnProgress, maybeOnProgres
 
   report("텍스트/좌표 정리중...", 0.82);
 
+  /* -------- 1) table 추출 -------- */
   let itemsTable = [];
   try {
+    // 구현체가 옵션을 받지 않는 경우도 있으니 안전하게 try
     itemsTable = extractPairsFromTwoColumnTable(data, { fromLang, toLang }) || [];
   } catch (e) {
     try {
@@ -840,10 +811,13 @@ export async function runOCRAndExtract(file, optionsOrOnProgress, maybeOnProgres
     }
   }
 
+  /* -------- 2) text 파서 -------- */
   const itemsText = parseRawTextToItems(rawText, fromLang, toLang, ctx);
 
+  // ✅ table이 조금이라도 있으면 무조건 text와 병합(누락 보강)
   let combinedBase = mergePairs([...(itemsTable || []), ...(itemsText || [])], fromLang, toLang, ctx);
 
+  // table이 강하게 잡히면 빠르게 종료(단, combined로 한 번 병합한 값을 사용)
   if (itemsTable.length >= 8 && combinedBase.length >= itemsTable.length) {
     report("완료", 1);
     return {
@@ -858,6 +832,9 @@ export async function runOCRAndExtract(file, optionsOrOnProgress, maybeOnProgres
     };
   }
 
+  /* -------- 2.5) PSM11 재시도(누락 의심일 때만, 1회) -------- */
+  // PSM 6은 표/2컬럼/띄엄띄엄 배치에서 누락이 생길 수 있음.
+  // "텍스트는 많아 보이는데 쌍이 너무 적다" 같은 케이스에서 PSM 11(sparse text) 재시도가 효과적.
   const quickRetryPSM11 = (rawText?.length ?? 0) >= 220 && (itemsText?.length ?? 0) <= 7;
 
   if (quickRetryPSM11) {
@@ -879,6 +856,7 @@ export async function runOCRAndExtract(file, optionsOrOnProgress, maybeOnProgres
         ctx
       );
 
+      // ✅ 의미 있게 개선되면 alt 채택
       if (itemsAlt.length >= combinedBase.length + 4) {
         const mergedRawAlt = [rawText, rAlt.rawText].join("\n");
         report("완료", 1);
@@ -898,10 +876,11 @@ export async function runOCRAndExtract(file, optionsOrOnProgress, maybeOnProgres
     }
   }
 
+  /* -------- 3) split OCR 보강(누락 의심일 때만) -------- */
   const expected = estimateExpectedCountFromRawText(rawText);
   const linesCount = (rawText ?? "").split("\n").map((l) => l.trim()).filter(Boolean).length;
 
-  const isShortList = expected > 0 && expected <= 6;
+  const isShortList = expected > 0 && expected <= 6; // 짧은 단어장은 split 억제(잡음 폭증 방지)
 
   const missingLikely = expected >= 10 && itemsText.length < Math.max(6, Math.floor(expected * 0.55));
 
