@@ -528,10 +528,6 @@ function parseLinesToPairs(lines, fromLang, toLang, ctx) {
     if (!s) continue;
     
     if (looksLikePageOrUnit(s)) continue;
-    
-// ⭐ 영어 단어로 시작하면 예문 필터 무시 (핵심)
-if (!/^[A-Za-z]/.test(s) && looksLikeExampleSentence(s, { strictKO: !!ctx?.strictKO })) continue;
-
     if (looksLikeExampleSentence(s, { strictKO: !!ctx?.strictKO })) continue;
 
     const sym = (s.match(/[^A-Za-z0-9가-힣\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\s'"\-]/g) || []).length;
