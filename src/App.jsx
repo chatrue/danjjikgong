@@ -1265,7 +1265,6 @@ const actionBtnStyle = {
   lineHeight: 1.1,       
   minHeight: 34,
 };
-
     return (
       <div className="container">
         <div className="card">
