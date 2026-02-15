@@ -1248,23 +1248,23 @@ export default function App() {
 
     // ✅ 버튼 줄바꿈 방지 + 세로 정렬(가로 스크롤 허용)
     const actionBarStyle = {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      flexWrap: "nowrap",
-      overflowX: "auto",
-      paddingBottom: 4,
-      WebkitOverflowScrolling: "touch",
-    };
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",       // ⭐ 모바일에서 줄바꿈
+  overflowX: "visible",   // ⭐ 가로 스크롤 제거
+  paddingBottom: 4,
+  WebkitOverflowScrolling: "touch",
+};
 
-    const actionBtnStyle = {
-      whiteSpace: "nowrap",
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      lineHeight: 1,
-      minHeight: 34,
-    };
+const actionBtnStyle = {
+  whiteSpace: "normal",   // ⭐ 글자 줄바꿈 허용
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  lineHeight: 1.1,        // ⭐ 조금 여유 주면 더 예쁨
+  minHeight: 34,
+};
 
     return (
       <div className="container">
