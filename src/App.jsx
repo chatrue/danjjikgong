@@ -1251,18 +1251,18 @@ export default function App() {
   display: "flex",
   alignItems: "center",
   gap: 8,
-  flexWrap: "wrap",       // ⭐ 모바일에서 줄바꿈
-  overflowX: "visible",   // ⭐ 가로 스크롤 제거
+  flexWrap: "wrap",      
+  overflowX: "visible",   
   paddingBottom: 4,
   WebkitOverflowScrolling: "touch",
 };
 
 const actionBtnStyle = {
-  whiteSpace: "normal",   // ⭐ 글자 줄바꿈 허용
+  whiteSpace: "normal",   
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  lineHeight: 1.1,        // ⭐ 조금 여유 주면 더 예쁨
+  lineHeight: 1.1,       
   minHeight: 34,
 };
 
