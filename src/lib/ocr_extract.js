@@ -527,6 +527,9 @@ function parseLinesToPairs(lines, fromLang, toLang, ctx) {
     s = stripLeadingIndex(s);
     if (!s) continue;
 
+    const forcedTerm = (s.match(/^[A-Za-z][A-Za-z\s'-]{1,30}/) || [])[0];
+    if (forcedTerm) s = forcedTerm + " " + s;
+    
     if (looksLikePageOrUnit(s)) continue;
     if (looksLikeExampleSentence(s, { strictKO: !!ctx?.strictKO })) continue;
 
