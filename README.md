@@ -1,16 +1,98 @@
-# React + Vite
+# 📘 단찍공 (DanJjikGong)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+단찍공은 사진으로 촬영한 단어장을 OCR로 인식하여
+영어 단어와 뜻을 빠르게 정리하고 학습할 수 있도록 만든 모바일 중심 학습 앱입니다.
 
-Currently, two official plugins are available:
+복잡한 서버 없이 **브라우저만으로 동작**하도록 설계되어 누구나 가볍게 사용할 수 있습니다.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## ✨ 주요 기능
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* 📸 **사진 OCR 인식**
 
-## Expanding the ESLint configuration
+  * 촬영한 단어장 이미지에서 영어/한국어 자동 추출
+* 🧠 **단어 학습 모드**
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+  * 객관식 퀴즈
+  * 주관식 입력
+* 🔊 **TTS 발음**
+
+  * 단어 음성 재생
+* 📱 **모바일 최적화 UI**
+
+  * 태블릿 및 스마트폰 사용에 맞춘 레이아웃
+* 💾 **로컬 저장**
+
+  * 서버 없이 브라우저에 데이터 저장
+
+---
+
+## 🧩 기술 스택
+
+* React + Vite
+* Tesseract.js (OCR)
+* Web Speech API (TTS)
+* PWA 기반 구조
+
+---
+
+## 🚀 실행 방법
+
+```bash
+npm install
+npm run dev
+```
+
+브라우저에서 아래 주소 접속:
+
+```
+http://localhost:5173
+```
+
+---
+
+## 📦 배포
+
+단찍공은 정적 사이트로 제작되어 아래 플랫폼에서 쉽게 배포할 수 있습니다.
+
+* Vercel
+* Netlify
+* Cloudflare Pages
+* GitHub Pages
+
+빌드 명령어:
+
+```bash
+npm run build
+```
+
+빌드 결과 폴더:
+
+```
+dist/
+```
+
+---
+
+## 📱 사용 방법
+
+1. 단어장 사진 촬영 또는 업로드
+2. OCR 실행
+3. 단어 목록 확인
+4. 객관식 / 주관식 학습 진행
+
+---
+
+## ⚠️ 참고 사항
+
+* OCR 정확도는 이미지 품질에 따라 달라질 수 있습니다.
+* 서버를 사용하지 않기 때문에 데이터는 기기 브라우저에 저장됩니다.
+
+---
+
+## 🙌 제작
+
+Made by Chatrue
+
+학습을 더 쉽고 직관적으로 만들기 위해 개발된 개인 프로젝트입니다.
