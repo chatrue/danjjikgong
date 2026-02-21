@@ -1246,25 +1246,23 @@ export default function App() {
       setEditMode(false);
     }
 
-    // ✅ 버튼 줄바꿈 방지 + 세로 정렬(가로 스크롤 허용)
-    const actionBarStyle = {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      flexWrap: "nowrap",
-      overflowX: "auto",
-      paddingBottom: 4,
-      WebkitOverflowScrolling: "touch",
-    };
+    // ✅ 버튼: 모바일에서도 옆으로 길어지지 않게 "줄바꿈 허용"
+const actionBarStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 8,
+  flexWrap: "wrap",
+};
 
-    const actionBtnStyle = {
-      whiteSpace: "nowrap",
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      lineHeight: 1,
-      minHeight: 34,
-    };
+const actionBtnStyle = {
+  whiteSpace: "nowrap",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  lineHeight: 1,
+  minHeight: 34,
+};
 
     return (
       <div className="container">
@@ -1272,40 +1270,39 @@ export default function App() {
           <Header right="home" />
           <ScreenTitle title={defaultNameForSet(currentSet)} />
 
-          <div className="kv" style={{ marginBottom: 10 }}>
-            <div className="pill">
-              단어 {currentSet.items.length}개 · {formatKoreanDateTime(currentSet.createdAt)}
-            </div>
+        {/* ✅ 단어개수/날짜는 위 줄, 버튼들은 그 아래 줄 */}
+<div className="kv set-kv" style={{ marginBottom: 10 }}>
+  <div className="pill">
+    단어 {currentSet.items.length}개 · {formatKoreanDateTime(currentSet.createdAt)}
+  </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>
-              <div style={actionBarStyle}>
-                <button className="iconbtn" style={actionBtnStyle} disabled={editMode} onClick={() => startQuizFromSet(currentSet, "mcq")}>
-                  객관식
-                </button>
-                <button className="iconbtn" style={actionBtnStyle} disabled={editMode} onClick={() => startQuizFromSet(currentSet, "written")}>
-                  주관식
-                </button>
+  <div className="set-actions" style={actionBarStyle}>
+    <button className="iconbtn" style={actionBtnStyle} disabled={editMode} onClick={() => startQuizFromSet(currentSet, "mcq")}>
+      객관식
+    </button>
+    <button className="iconbtn" style={actionBtnStyle} disabled={editMode} onClick={() => startQuizFromSet(currentSet, "written")}>
+      주관식
+    </button>
 
-                {!editMode ? (
-                  <button className="iconbtn" style={actionBtnStyle} onClick={() => setEditMode(true)}>
-                    수정
-                  </button>
-                ) : (
-                  <button className="iconbtn" style={actionBtnStyle} onClick={saveEdits}>
-                    저장
-                  </button>
-                )}
+    {!editMode ? (
+      <button className="iconbtn" style={actionBtnStyle} onClick={() => setEditMode(true)}>
+        수정
+      </button>
+    ) : (
+      <button className="iconbtn" style={actionBtnStyle} onClick={saveEdits}>
+        저장
+      </button>
+    )}
 
-                <button className="iconbtn" style={actionBtnStyle} onClick={() => go("sets")}>
-                  이전 단어장
-                </button>
+    <button className="iconbtn" style={actionBtnStyle} onClick={() => go("sets")}>
+      이전 단어장
+    </button>
 
-                <button className="iconbtn" style={actionBtnStyle} onClick={() => setExportOpen(true)}>
-                  내보내기
-                </button>
-              </div>
-            </div>
-          </div>
+    <button className="iconbtn" style={actionBtnStyle} onClick={() => setExportOpen(true)}>
+      내보내기
+    </button>
+  </div>
+
 
           <div className="hr" />
 
@@ -1501,6 +1498,7 @@ export default function App() {
         <Modal open={modal.open} title={modal.title} actions={modalActions}>
           {modal.body}
         </Modal>
+      </div>
       </div>
     );
   }

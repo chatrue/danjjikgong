@@ -1,6 +1,31 @@
 :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif; }
 * { box-sizing: border-box; }
 body { margin: 0; background: #f6f7f9; color: #111; }
+
+/* footer를 화면 맨 아래 가운데에 안정적으로 */
+html, body, #root { height: 100%; }
+
+.app-shell{
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main{
+  flex: 1;
+  /* App 내용이 짧아도 footer가 내려가도록 */
+}
+
+/* 애플 감성 + 너무 튀지 않게 */
+.app-footer{
+  text-align: center;
+  font-size: 12px;
+  color: #8a8a8a;
+  letter-spacing: 0.2px;
+  opacity: 0.9;
+  padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
+}
+
 a { color: inherit; }
 .container { max-width: 720px; margin: 0 auto; padding: 16px; }
 .card { background: #fff; border-radius: 16px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
@@ -32,6 +57,26 @@ a { color: inherit; }
 .table th, .table td { padding: 10px; border-bottom: 1px solid #eef2f7; vertical-align: top; }
 .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; font-size: 12px; background:#f3f4f6; }
 .kv { display:flex; justify-content: space-between; align-items:center; gap: 10px; }
+
+/* ✅ 단어장 상세: 상단 정보(단어개수/날짜) 1줄 + 버튼줄은 아래로 */
+.set-kv {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.set-actions {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .set-actions { justify-content: flex-start; gap: 6px; }
+  .set-actions .iconbtn { padding: 8px 10px; }
+}
+
 .hr { height:1px; background:#eef2f7; margin: 12px 0; }
 .iconbtn {
   border: 1px solid #e5e7eb;
